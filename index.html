@@ -119,10 +119,19 @@
             if (typeof val === 'string' && val.includes('Date')) {
                 const match = val.match(/\d+/g);
                 if (match) {
-                    return `${match[2].padStart(2,'0')}/${(parseInt(match[1])+1).toString().padStart(2,'0')}/${match[0]}`;
+                    return `${match[2].padStart(2,'0')}/${(parseInt(match[1])+1).toString().padStart(2,'0')}/${match[0]} ${match[3].padStart(2,'0')}:${match[4].padStart(2,'0')}`;
                 }
             }
             return val;
+        }
+
+        // Converte a data do Google para objeto Date real do JS para comparação
+        function parseGoogleDate(val) {
+            if (typeof val === 'string' && val.includes('Date')) {
+                const m = val.match(/\d+/g);
+                return new Date(m[0], m[1], m[2]);
+            }
+            return null;
         }
 
         async function init() {
@@ -140,7 +149,11 @@
                     let obj = {};
                     row.c.forEach((cell, i) => {
                         const label = cols[i].label;
-                        if (label) obj[label] = cell ? cell.v : '';
+                        if (label) {
+                            obj[label] = cell ? cell.v : '';
+                            // Adiciona campo de data real para o filtro
+                            if(label === 'Carimbo de data/hora') obj._jsDate = parseGoogleDate(cell.v);
+                        }
                     });
                     return obj;
                 }).filter(d => d.Empresa);
@@ -164,14 +177,36 @@
             document.getElementById('f-empresa').innerHTML = empresas.map(e => `<option value="${e}">${e}</option>`).join('');
         }
 
+        function limparDatas() {
+            document.getElementById('f-data-inicio').value = '';
+            document.getElementById('f-data-fim').value = '';
+            atualizarInterface();
+        }
+
         function atualizarInterface() {
-            const fLoja = document.getElementById('f-loja').value;
+            const lojasSelecionadas = Array.from(document.getElementById('f-loja').selectedOptions).map(opt => opt.value);
             const fEmpresa = document.getElementById('f-empresa').value;
+            const fDataInicio = document.getElementById('f-data-inicio').value;
+            const fDataFim = document.getElementById('f-data-fim').value;
 
             const dados = masterData.filter(d => {
-                const checkLoja = fLoja === "Todas as Lojas" || d['Super Raimundinho'] === fLoja;
+                const checkLoja = lojasSelecionadas.includes(d['Super Raimundinho']);
                 const checkEmp = fEmpresa === "Todas as Empresas" || d.Empresa === fEmpresa;
-                return checkLoja && checkEmp;
+                
+                // Filtro de Datas
+                let checkData = true;
+                if (d._jsDate) {
+                    if (dataInicio) {
+                        const dIni = new Date(dataInicio + "T00:00:00");
+                        if (d._jsDate < dIni) checkData = false;
+                    }
+                    if (dataFim) {
+                        const dFim = new Date(dataFim + "T23:59:59");
+                        if (d._jsDate > dFim) checkData = false;
+                    }
+                }
+
+                return checkLoja && checkEmp && checkData;
             });
 
             document.getElementById('k-total').innerText = dados.length;
@@ -211,7 +246,7 @@
 
         function renderTabela(dados) {
             const tbody = document.getElementById('t-corpo');
-            tbody.innerHTML = dados.slice(-100).reverse().map(d => `
+            tbody.innerHTML = dados.slice().reverse().map(d => `
                 <tr class="hover:bg-blue-50 transition-colors uppercase text-[11px]">
                     <td class="px-6 py-4 text-slate-400 font-mono italic">${formatarDataBR(d['Carimbo de data/hora'])}</td>
                     <td class="px-6 py-4 font-bold text-slate-700">${d['Nome coloborador:'] || '-'}</td>
