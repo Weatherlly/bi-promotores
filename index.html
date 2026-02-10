@@ -10,8 +10,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .chart-container { position: relative; height: 300px; width: 100%; }
-        /* Padronização dos Selects */
-        select[multiple] { height: 120px; padding: 8px; border: 2px solid #e2e8f0; width: 100%; border-radius: 12px; background-color: #f8fafc; }
+        select[multiple] { height: 120px; padding: 8px; border: 2px solid #e2e8f0; width: 100%; border-radius: 12px; background-color: #f8fafc; outline: none; }
         select[multiple] option { padding: 6px 10px; border-radius: 6px; margin-bottom: 2px; font-size: 11px; }
         select[multiple] option:checked { background: #2563eb linear-gradient(0deg, #2563eb 0%, #2563eb 100%); color: white; }
     </style>
@@ -22,7 +21,7 @@
         <div class="container mx-auto flex justify-between items-center">
             <div>
                 <h1 class="text-xl font-black uppercase italic tracking-tighter">BI Promotores</h1>
-                <p class="text-[10px] opacity-70">Controle de Fluxo e Permanência</p>
+                <p class="text-[10px] opacity-70">Controle de Fluxo e Permanência - Super Raimundinho</p>
             </div>
             <div id="status" class="bg-blue-800 px-4 py-2 rounded-full text-[10px] font-bold border border-blue-600 tracking-widest">
                 SINCRONIZANDO...
@@ -77,12 +76,12 @@
 
         <section class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between">
+                <div class="p-4 bg-slate-50 border-b border-slate-200">
                     <h3 class="font-bold text-xs uppercase italic text-slate-600">Duração por Visita (Entrada x Saída)</h3>
                 </div>
                 <div class="overflow-y-auto h-[300px]">
                     <table class="w-full text-left text-xs">
-                        <thead class="bg-white sticky top-0 shadow-sm">
+                        <thead class="bg-white sticky top-0 shadow-sm border-b border-slate-100">
                             <tr class="text-slate-400 font-bold uppercase">
                                 <th class="p-4">Promotor</th>
                                 <th class="p-4">Loja</th>
@@ -94,8 +93,8 @@
                     </table>
                 </div>
             </div>
-            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
-                <h3 class="text-sm font-bold text-slate-500 uppercase mb-4 italic">Participação Loja</h3>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center items-center">
+                <h3 class="text-sm font-bold text-slate-500 uppercase mb-4 italic text-center">Participação por Loja</h3>
                 <div class="chart-container"><canvas id="c-loja"></canvas></div>
             </div>
         </section>
@@ -109,7 +108,7 @@
                     <thead class="bg-white sticky top-0 shadow-sm border-b border-slate-100">
                         <tr class="text-[10px] text-slate-400 font-bold uppercase">
                             <th class="p-6">Data/Hora</th>
-                            <th class="p-6">Tipo</th>
+                            <th class="p-6">Movimentação</th>
                             <th class="p-6">Colaborador</th>
                             <th class="p-6">Empresa</th>
                             <th class="p-6">Loja</th>
@@ -159,7 +158,9 @@
                     let obj = {};
                     row.c.forEach((cell, i) => {
                         const label = cols[i].label || `col_${i}`;
+                        // Mapeia os dados usando f (formatado) ou v (valor)
                         obj[label] = cell ? (cell.f || cell.v) : '';
+                        
                         if (label === 'Carimbo de data/hora' && cell) {
                             obj._jsDate = parseGoogleDateTime(cell.v);
                         }
@@ -172,6 +173,7 @@
                 document.getElementById('status').innerText = "ONLINE";
                 document.getElementById('status').className = "bg-emerald-500 px-4 py-2 rounded-full text-[10px] font-bold";
             } catch (e) {
+                console.error(e);
                 document.getElementById('status').innerText = "ERRO";
             }
         }
@@ -217,9 +219,9 @@
 
         function calcularPermanencia(dados) {
             let visitas = [];
-            // Agrupar por Promotor + Loja + Data (sem hora) para achar o par Entrada/Saída
             const grupos = {};
             
+            // Agrupamos registros por Colaborador + Loja + Data (Dia)
             dados.forEach(d => {
                 if (!d._jsDate) return;
                 const dia = d._jsDate.toLocaleDateString();
@@ -233,14 +235,15 @@
 
             for (let key in grupos) {
                 const registros = grupos[key].sort((a,b) => a._jsDate - b._jsDate);
-                const entrada = registros.find(r => r['Registro:'] === 'Entrada');
-                const saida = registros.find(r => r['Registro:'] === 'Saida');
+                // Procura a entrada e a saída usando o nome exato da sua coluna G: "Entrada / Saida"
+                const entrada = registros.find(r => r['Entrada / Saida'] === 'Entrada');
+                const saida = registros.find(r => r['Entrada / Saida'] === 'Saida');
 
                 if (entrada && saida && saida._jsDate > entrada._jsDate) {
                     const diffMs = saida._jsDate - entrada._jsDate;
                     const diffMin = Math.floor(diffMs / 60000);
                     
-                    // Só conta se a visita for menor que 12 horas (evita erros de esquecimento)
+                    // Validação: Visitas reais costumam durar entre 1 min e 12 horas
                     if (diffMin > 0 && diffMin < 720) {
                         visitas.push({
                             nome: entrada['Nome coloborador:'],
@@ -254,7 +257,6 @@
                 }
             }
 
-            // UI
             document.getElementById('k-concluidas').innerText = totalConcluidas;
             const media = totalConcluidas > 0 ? Math.round(somaMinutos / totalConcluidas) : 0;
             const h = Math.floor(media / 60);
@@ -263,7 +265,7 @@
 
             const tbody = document.getElementById('t-duracao');
             tbody.innerHTML = visitas.slice().reverse().map(v => `
-                <tr class="hover:bg-slate-50">
+                <tr class="hover:bg-slate-50 transition-colors">
                     <td class="p-4 font-bold text-slate-700">${v.nome}</td>
                     <td class="p-4 text-slate-500">${v.loja}</td>
                     <td class="p-4 text-slate-400 font-mono">${v.data}</td>
@@ -280,27 +282,41 @@
                 type: 'doughnut',
                 data: {
                     labels: Object.keys(countsLoja),
-                    datasets: [{ data: Object.values(countsLoja), backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'], borderWidth: 0 }]
+                    datasets: [{ 
+                        data: Object.values(countsLoja), 
+                        backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'], 
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } } 
+                }
             });
         }
 
         function renderTabelaGeral(dados) {
             const tbody = document.getElementById('t-corpo');
-            tbody.innerHTML = dados.slice().reverse().map(d => `
+            tbody.innerHTML = dados.slice().reverse().map(d => {
+                const tipo = d['Entrada / Saida'] || '-';
+                const corTipo = tipo === 'Entrada' ? 'text-emerald-600 bg-emerald-50' : (tipo === 'Saida' ? 'text-red-600 bg-red-50' : 'text-slate-400');
+                
+                return `
                 <tr class="hover:bg-blue-50 transition-colors uppercase text-[11px]">
                     <td class="px-6 py-4 text-slate-400 font-mono italic">${formatarDataBR(d['Carimbo de data/hora'])}</td>
                     <td class="px-6 py-4 font-bold">
-                        <span class="${d['Registro:'] === 'Entrada' ? 'text-emerald-600' : 'text-red-600'}">
-                            ${d['Registro:'] || '-'}
+                        <span class="px-3 py-1 rounded-full ${corTipo}">
+                            ${tipo}
                         </span>
                     </td>
                     <td class="px-6 py-4 font-bold text-slate-700">${d['Nome coloborador:'] || '-'}</td>
                     <td class="px-6 py-4 text-blue-600 font-bold">${d.Empresa || '-'}</td>
                     <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 text-slate-500 font-medium">${d['Super Raimundinho'] || '-'}</span></td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function agrupar(arr, key) {
