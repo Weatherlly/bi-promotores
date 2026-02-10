@@ -10,7 +10,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .chart-container { position: relative; height: 300px; width: 100%; }
-        /* Estilo para o select múltiplo parecer mais moderno */
         select[multiple] { height: 100px; padding: 8px; }
         select[multiple] option { padding: 8px; border-radius: 6px; margin-bottom: 2px; }
         select[multiple] option:checked { background: #2563eb linear-gradient(0deg, #2563eb 0%, #2563eb 100%); color: white; }
@@ -22,7 +21,7 @@
         <div class="container mx-auto flex justify-between items-center">
             <div>
                 <h1 class="text-xl font-black uppercase italic tracking-tighter">BI Promotores</h1>
-                <p class="text-[10px] opacity-70">Filtros Avançados: Datas e Multilojas</p>
+                <p class="text-[10px] opacity-70">Conexão Direta: Google Sheets Online</p>
             </div>
             <div id="status" class="bg-blue-800 px-4 py-2 rounded-full text-[10px] font-bold border border-blue-600 tracking-widest">
                 SINCRONIZANDO...
@@ -53,7 +52,7 @@
             </div>
             <div class="flex items-end">
                 <button onclick="location.reload()" class="w-full bg-slate-900 text-white font-bold p-4 rounded-xl hover:bg-black transition shadow-lg shadow-slate-200 uppercase text-xs">
-                    Atualizar Dados
+                    Atualizar Agora
                 </button>
             </div>
         </section>
@@ -86,7 +85,7 @@
 
         <section class="bg-white rounded-3xl shadow-sm overflow-hidden border border-slate-200">
             <div class="p-6 bg-slate-50 border-b border-slate-200">
-                <h3 class="font-bold text-sm uppercase italic text-slate-600">Registros Filtrados</h3>
+                <h3 class="font-bold text-sm uppercase italic text-slate-600">Registros Filtrados em Tempo Real</h3>
             </div>
             <div class="overflow-x-auto max-h-[500px]">
                 <table class="w-full text-left">
@@ -105,49 +104,43 @@
     </main>
 
     <script>
+        // ID DA SUA PLANILHA (Já está o seu)
         const SHEET_ID = '13SKsqWIa-GpdIGnIkMnXGuGrIhbovlMD6wtAjIv_Li4';
         const G_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
         let masterData = [];
         let chart1, chart2;
 
+        // Função para formatar data do Google (Data(2026,1,4,15,30,0)) ou ISO para BR
         function formatarDataBR(val) {
             if (!val) return '-';
+            
+            // Caso o Google mande como string de data "Date(2026,1,4,15,30,0)"
             if (typeof val === 'string' && val.includes('Date')) {
                 const match = val.match(/\d+/g);
                 if (match) {
-                    return `${match[2].padStart(2,'0')}/${(parseInt(match[1])+1).toString().padStart(2,'0')}/${match[0]} ${match[3].padStart(2,'0')}:${match[4].padStart(2,'0')}`;
+                    return `${match[2].padStart(2,'0')}/${(parseInt(match[1])+1).toString().padStart(2,'0')}/${match[0]}`;
                 }
             }
             return val;
-        }
-
-        // Converte a data do Google para objeto Date real do JS para comparação
-        function parseGoogleDate(val) {
-            if (typeof val === 'string' && val.includes('Date')) {
-                const m = val.match(/\d+/g);
-                return new Date(m[0], m[1], m[2]);
-            }
-            return null;
         }
 
         async function init() {
             try {
                 const response = await fetch(G_URL);
                 const text = await response.text();
+                // Limpa o lixo que o Google coloca antes do JSON
                 const json = JSON.parse(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1));
+                
                 const rows = json.table.rows;
                 const cols = json.table.cols;
 
+                // Mapeia os dados dinamicamente baseado nos labels da planilha
                 masterData = rows.map(row => {
                     let obj = {};
                     row.c.forEach((cell, i) => {
                         const label = cols[i].label;
-                        if (label) {
-                            obj[label] = cell ? cell.v : '';
-                            // Adiciona campo de data real para o filtro
-                            if(label === 'Carimbo de data/hora') obj._jsDate = parseGoogleDate(cell.v);
-                        }
+                        if (label) obj[label] = cell ? cell.v : '';
                     });
                     return obj;
                 }).filter(d => d.Empresa);
@@ -158,54 +151,27 @@
                 setupFiltros();
                 atualizarInterface();
             } catch (error) {
+                console.error(error);
                 document.getElementById('status').innerText = "ERRO DE CONEXÃO";
                 document.getElementById('status').className = "bg-red-600 px-4 py-2 rounded-full text-[10px] font-bold";
             }
         }
 
         function setupFiltros() {
-            const lojas = [...new Set(masterData.map(d => d['Super Raimundinho']))].filter(Boolean).sort();
+            const lojas = ["Todas as Lojas", ...new Set(masterData.map(d => d['Super Raimundinho']))].filter(Boolean).sort();
             const empresas = ["Todas as Empresas", ...new Set(masterData.map(d => d.Empresa))].filter(Boolean).sort();
-            
-            // Renderiza lojas (Sem a opção "Todas" no múltiplo, o usuário seleciona as que quer)
-            document.getElementById('f-loja').innerHTML = lojas.map(l => `<option value="${l}" selected>${l}</option>`).join('');
+            document.getElementById('f-loja').innerHTML = lojas.map(l => `<option value="${l}">${l}</option>`).join('');
             document.getElementById('f-empresa').innerHTML = empresas.map(e => `<option value="${e}">${e}</option>`).join('');
         }
 
-        function limparDatas() {
-            document.getElementById('f-data-inicio').value = '';
-            document.getElementById('f-data-fim').value = '';
-            atualizarInterface();
-        }
-
         function atualizarInterface() {
-            // Pega múltiplas lojas selecionadas
-            const lojasSelecionadas = Array.from(document.getElementById('f-loja').selectedOptions).map(opt => opt.value);
+            const fLoja = document.getElementById('f-loja').value;
             const fEmpresa = document.getElementById('f-empresa').value;
-            const dataInicio = document.getElementById('f-data-inicio').value;
-            const dataFim = document.getElementById('f-data-fim').value;
 
             const dados = masterData.filter(d => {
-                // Filtro de Loja
-                const checkLoja = lojasSelecionadas.length === 0 || lojasSelecionadas.includes(d['Super Raimundinho']);
-                
-                // Filtro de Empresa
+                const checkLoja = fLoja === "Todas as Lojas" || d['Super Raimundinho'] === fLoja;
                 const checkEmp = fEmpresa === "Todas as Empresas" || d.Empresa === fEmpresa;
-                
-                // Filtro de Datas
-                let checkData = true;
-                if (d._jsDate) {
-                    if (dataInicio) {
-                        const dIni = new Date(dataInicio + "T00:00:00");
-                        if (d._jsDate < dIni) checkData = false;
-                    }
-                    if (dataFim) {
-                        const dFim = new Date(dataFim + "T23:59:59");
-                        if (d._jsDate > dFim) checkData = false;
-                    }
-                }
-
-                return checkLoja && checkEmp && checkData;
+                return checkLoja && checkEmp;
             });
 
             document.getElementById('k-total').innerText = dados.length;
@@ -245,7 +211,7 @@
 
         function renderTabela(dados) {
             const tbody = document.getElementById('t-corpo');
-            tbody.innerHTML = dados.slice().reverse().map(d => `
+            tbody.innerHTML = dados.slice(-100).reverse().map(d => `
                 <tr class="hover:bg-blue-50 transition-colors uppercase text-[11px]">
                     <td class="px-6 py-4 text-slate-400 font-mono italic">${formatarDataBR(d['Carimbo de data/hora'])}</td>
                     <td class="px-6 py-4 font-bold text-slate-700">${d['Nome coloborador:'] || '-'}</td>
